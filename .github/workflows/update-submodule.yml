@@ -27,17 +27,19 @@ jobs:
           token: ${{ secrets.AUTO_MERGE_TOKEN }}
           submodules: true
           fetch-depth: 0
+          ref: ${{ github.event.client_payload.target_branch }}
 
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Update submodule to latest master
+      - name: Update submodule to latest commit
         run: |
           SUBMODULE="${{ github.event.client_payload.submodule_name }}"
+          TARGET_BRANCH="${{ github.event.client_payload.target_branch }}"
           cd ${SUBMODULE}
-          git fetch origin master
+          git fetch origin ${TARGET_BRANCH}
           git checkout ${{ github.event.client_payload.submodule_ref }}
           cd ..
           git add ${SUBMODULE}
@@ -66,7 +68,7 @@ jobs:
             - **Commit**: ${{ github.event.client_payload.submodule_ref }}
             - **Triggered by**: ${{ github.event.client_payload.triggered_by }}
             - **Message**: ${{ github.event.client_payload.commit_message }}
-          base: master
+          base: ${{ github.event.client_payload.target_branch }}
           labels: automated,submodule-update
           delete-branch: true
 
