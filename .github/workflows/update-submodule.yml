@@ -1,0 +1,79 @@
+name: Update Submodule
+
+on:
+  repository_dispatch:
+    types: [submodule-updated]
+
+concurrency:
+  group: submodule-update
+  cancel-in-progress: false
+
+jobs:
+  update-submodule:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate submodule name
+        run: |
+          VALID_SUBMODULES=("EAP-Api")
+          SUBMODULE="${{ github.event.client_payload.submodule_name }}"
+          if [[ ! " ${VALID_SUBMODULES[*]} " =~ " ${SUBMODULE} " ]]; then
+            echo "Invalid submodule name: ${SUBMODULE}"
+            exit 1
+          fi
+
+      - name: Checkout super repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AUTO_MERGE_TOKEN }}
+          submodules: true
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update submodule to latest master
+        run: |
+          SUBMODULE="${{ github.event.client_payload.submodule_name }}"
+          cd ${SUBMODULE}
+          git fetch origin master
+          git checkout ${{ github.event.client_payload.submodule_ref }}
+          cd ..
+          git add ${SUBMODULE}
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --cached --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.AUTO_MERGE_TOKEN }}
+          commit-message: "chore: update ${{ github.event.client_payload.submodule_name }} submodule"
+          branch: "auto-update/${{ github.event.client_payload.submodule_name }}-${{ github.run_id }}"
+          title: "chore: update ${{ github.event.client_payload.submodule_name }} submodule"
+          body: |
+            ## Automated Submodule Update
+            - **Submodule**: ${{ github.event.client_payload.submodule_name }}
+            - **Commit**: ${{ github.event.client_payload.submodule_ref }}
+            - **Triggered by**: ${{ github.event.client_payload.triggered_by }}
+            - **Message**: ${{ github.event.client_payload.commit_message }}
+          base: master
+          labels: automated,submodule-update
+          delete-branch: true
+
+      - name: Enable auto-merge
+        if: steps.create-pr.outputs.pull-request-number
+        run: |
+          gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} \
+            --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN }}
