@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Validate submodule name
         run: |
-          VALID_SUBMODULES=("EAP-Api")
+          VALID_SUBMODULES=("submodule")
           SUBMODULE="${{ github.event.client_payload.submodule_name }}"
           if [[ ! " ${VALID_SUBMODULES[*]} " =~ " ${SUBMODULE} " ]]; then
             echo "Invalid submodule name: ${SUBMODULE}"
